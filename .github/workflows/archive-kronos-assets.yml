@@ -99,7 +99,8 @@ jobs:
                   print('Remote asset already verified:', archive.name, flush=True)
                   continue
               if existing:
-                  assert release['draft'] and existing['state'] == 'starter' and existing['size'] == 0
+                  assert release['draft'] and existing['state'] == 'starter' and existing.get('digest') is None
+                  assert existing['size'] in (0, archive.stat().st_size)
                   api('/repos/' + REPO + '/releases/assets/' + str(existing['id']), method='DELETE')
               upload_url = upload_base + '?name=' + urllib.parse.quote(archive.name)
               with archive.open('rb') as stream:
