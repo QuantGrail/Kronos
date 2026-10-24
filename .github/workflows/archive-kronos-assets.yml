@@ -1,0 +1,111 @@
+name: Archive public Kronos model weights
+on:
+  push:
+    branches: [codex/archive-open-assets]
+    paths: [.github/workflows/archive-kronos-assets.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Download pinned public weights, verify and archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE_SPEC: '[{"id":"NeoQuasar/Kronos-mini","revision":"f4e68697d9d5aed55cef5c96aabc3376bcad9f81","license":"mit","files":[{"rfilename":".gitattributes","blobId":"a6344aac8c09253b3b630fb776ae94478aa0275b","size":1519},{"rfilename":"README.md","blobId":"1a2dbfe2fa6b9c73a609c3917a55040aa9d52ef2","size":8841},{"rfilename":"config.json","blobId":"93bce6627b291219e82c0da530c11658979d8328","size":225},{"rfilename":"model.safetensors","blobId":"6b1196d5c3030f595beae9dd06cf53ba578fc455","size":16440776,"lfs":{"sha256":"a7d5f37e2e9fbd9891f7d7d4f72574512dd1f704fee14223e0a8cd0fbf54197c","size":16440776,"pointerSize":133}}]},{"id":"NeoQuasar/Kronos-small","revision":"901c26c1332695a2a8f243eb2f37243a37bea320","license":"mit","files":[{"rfilename":".gitattributes","blobId":"a6344aac8c09253b3b630fb776ae94478aa0275b","size":1519},{"rfilename":"README.md","blobId":"fd5f9e208cbf2b52bc4d11dcbaca9ae7a0036585","size":8855},{"rfilename":"config.json","blobId":"66df12427eadc6ad1980fae63ad5aef4f93bc9d6","size":228},{"rfilename":"model.safetensors","blobId":"b628c2641f599bfa52999ecf4fff3de9fad5f37a","size":98980656,"lfs":{"sha256":"b082dfcbd8e8c142a725c8bbb99781802f38fec81210e13479effb32b3c3e020","size":98980656,"pointerSize":133}}]},{"id":"NeoQuasar/Kronos-base","revision":"2b554741eca47781b64468546e77fef3e85130e6","license":"mit","files":[{"rfilename":".gitattributes","blobId":"a6344aac8c09253b3b630fb776ae94478aa0275b","size":1519},{"rfilename":"README.md","blobId":"1a2dbfe2fa6b9c73a609c3917a55040aa9d52ef2","size":8841},{"rfilename":"config.json","blobId":"b38b53ec92facc89fc178f641a951cbe9730ecc7","size":228},{"rfilename":"model.safetensors","blobId":"72c493a949886e90774a02b6986c761c56816948","size":409264008,"lfs":{"sha256":"abff193acab6db1a0368e9773e75799d11403b6d054ee6d5f0a11aeabc5f4b83","size":409264008,"pointerSize":134}}]},{"id":"NeoQuasar/Kronos-Tokenizer-base","revision":"0e0117387f39004a9016484a186a908917e22426","license":"mit","files":[{"rfilename":".gitattributes","blobId":"a6344aac8c09253b3b630fb776ae94478aa0275b","size":1519},{"rfilename":"README.md","blobId":"a1a20fa45ed35de0f6b4f94d434337cc6bd3f8b1","size":8863},{"rfilename":"config.json","blobId":"050b676e14720956dc6ff93a755e65dee5536807","size":301},{"rfilename":"model.safetensors","blobId":"afc42b25addee24a49dbc7ba2d9dd8ed36a7f7b8","size":15842368,"lfs":{"sha256":"59d85f6af76a2c3b8240ea06cb21db4213b4eeca053f246b23e29cf832fc6bee","size":15842368,"pointerSize":133}}]},{"id":"NeoQuasar/Kronos-Tokenizer-2k","revision":"26966d0035065a0cae0ebad7af8ece35bc1fb51c","license":"mit","files":[{"rfilename":".gitattributes","blobId":"a6344aac8c09253b3b630fb776ae94478aa0275b","size":1519},{"rfilename":"README.md","blobId":"8dc7ce987e1357f2984170e65fdfa543d52984a2","size":8861},{"rfilename":"config.json","blobId":"d17521b9d532419e3f173460e5e6b95ee4c0787d","size":301},{"rfilename":"model.safetensors","blobId":"5265bd1fda257369b57e6fa66e50a09d17c602ac","size":15842376,"lfs":{"sha256":"b97ec46b3b72160509e289183eaf7bdf5f0dac5bb9b49522f6d46638a99a8717","size":15842376,"pointerSize":133}}]}]'
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          import zipfile
+          
+          SPEC = json.loads(os.environ['ARCHIVE_SPEC'])
+          REPO = 'QuantGrail/Kronos'
+          RELEASE_ID = 422747675
+          HEADERS = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'User-Agent': 'QuantGrail-Kronos-Archive'}
+          OUT = Path('public-assets')
+          OUT.mkdir(exist_ok=True)
+          
+          def api(path, method='GET', data=None, extra_headers=None):
+              headers = dict(HEADERS, **(extra_headers or {}))
+              url = path if path.startswith('https://uploads.github.com/') else 'https://api.github.com' + path
+              req = urllib.request.Request(url, data=data, headers=headers, method=method)
+              with urllib.request.urlopen(req, timeout=300) as response:
+                  return json.load(response) if response.status != 204 else None
+          
+          def sha256(path):
+              with path.open('rb') as f:
+                  return hashlib.file_digest(f, 'sha256').hexdigest()
+          
+          release = api('/repos/' + REPO + '/releases/' + str(RELEASE_ID))
+          assert release['draft'] and release['tag_name'] == 'open-assets-2026-10-24'
+          upload_base = release['upload_url'].split('{')[0]
+          assert urllib.parse.urlparse(upload_base).hostname == 'uploads.github.com'
+          with urllib.request.urlopen('https://raw.githubusercontent.com/shiyu-coder/Kronos/67b630e67f6a18c9e9be918d9b4337c960db1e9a/LICENSE', timeout=60) as response:
+              license_bytes = response.read()
+          
+          for model in SPEC:
+              name = model['id'].split('/')[-1]
+              folder = OUT / name
+              folder.mkdir(exist_ok=True)
+              for item in model['files']:
+                  filename = item['rfilename']
+                  assert '/' not in filename and '\\' not in filename
+                  path = folder / filename
+                  url = 'https://huggingface.co/' + model['id'] + '/resolve/' + model['revision'] + '/' + filename + '?download=true'
+                  for attempt in range(3):
+                      try:
+                          with urllib.request.urlopen(url, timeout=180) as response, path.open('wb') as dest:
+                              while chunk := response.read(1024 * 1024):
+                                  dest.write(chunk)
+                          assert path.stat().st_size == item['size']
+                          if 'lfs' in item:
+                              assert sha256(path) == item['lfs']['sha256']
+                          else:
+                              assert hashlib.sha1(('blob ' + str(item['size']) + '\0').encode() + path.read_bytes()).hexdigest() == item['blobId']
+                          break
+                      except Exception:
+                          if attempt == 2:
+                              raise
+                          time.sleep(2)
+                  print('Verified original file:', name + '/' + filename, flush=True)
+              archive = OUT / (name + '--' + model['revision'][:12] + '.zip')
+              with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_STORED) as bundle:
+                  for item in model['files']:
+                      info = zipfile.ZipInfo(name + '/' + item['rfilename'], date_time=(2026, 10, 24, 0, 0, 0))
+                      info.create_system = 0
+                      info.compress_type = zipfile.ZIP_STORED
+                      with bundle.open(info, 'w', force_zip64=True) as dest, (folder / item['rfilename']).open('rb') as src:
+                          while chunk := src.read(1024 * 1024):
+                              dest.write(chunk)
+                  info = zipfile.ZipInfo(name + '/LICENSE', date_time=(2026, 10, 24, 0, 0, 0))
+                  info.create_system = 0
+                  bundle.writestr(info, license_bytes)
+              with zipfile.ZipFile(archive) as bundle:
+                  assert bundle.testzip() is None
+              expected_digest = 'sha256:' + sha256(archive)
+              assets = api('/repos/' + REPO + '/releases/' + str(RELEASE_ID) + '/assets?per_page=100')
+              existing = next((a for a in assets if a['name'] == archive.name), None)
+              if existing and existing['state'] == 'uploaded':
+                  assert existing['size'] == archive.stat().st_size and existing.get('digest') == expected_digest, 'Existing complete asset does not match; refusing overwrite'
+                  print('Remote asset already verified:', archive.name, flush=True)
+                  continue
+              if existing:
+                  assert release['draft'] and existing['state'] == 'starter' and existing['size'] == 0
+                  api('/repos/' + REPO + '/releases/assets/' + str(existing['id']), method='DELETE')
+              upload_url = upload_base + '?name=' + urllib.parse.quote(archive.name)
+              with archive.open('rb') as stream:
+                  result = api(upload_url, method='POST', data=stream, extra_headers={'Content-Type': 'application/zip', 'Content-Length': str(archive.stat().st_size)})
+              assert result['state'] == 'uploaded' and result['size'] == archive.stat().st_size and result.get('digest') == expected_digest
+              print('Uploaded and verified:', archive.name, expected_digest, flush=True)
+          
+          print('All five model archives are verified in the draft release. Publication is a separate final step.', flush=True)
+          PY
